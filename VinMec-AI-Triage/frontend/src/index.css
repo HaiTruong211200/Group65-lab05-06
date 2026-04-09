@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #003974;
+  --color-primary-container: #00509e;
+  --color-on-primary: #ffffff;
+  --color-secondary: #4d5f7f;
+  --color-secondary-container: #c5d8fd;
+  --color-on-secondary-container: #4c5e7e;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-surface: #f8f9fa;
+  --color-on-surface: #191c1d;
+  --color-surface-variant: #e1e3e4;
+  --color-on-surface-variant: #424751;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f3f4f5;
+  --color-surface-container: #edeeef;
+  --color-surface-container-high: #e7e8e9;
+  --color-surface-container-highest: #e1e3e4;
+  --color-outline: #727782;
+  --color-outline-variant: #c2c6d3;
+}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(186, 26, 26, 0.7); }
+  70% { box-shadow: 0 0 0 20px rgba(186, 26, 26, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(186, 26, 26, 0); }
+}
+
+@keyframes shimmer {
+  to { background-position: 200% center; }
+}
+
+.animate-pulse-red {
+  animation: pulse-red 2s infinite;
+}
