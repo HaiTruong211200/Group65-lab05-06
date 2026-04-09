@@ -24,7 +24,7 @@ interface TriageScreenProps {
   onEmergencyTrigger: () => void;
 }
 
-const API_BASE_URL = "http://127.0.0.1:8001";
+const API_BASE_URL = "http://127.0.0.1:8000";
 const INITIAL_MESSAGES: Message[] = [
   {
     id: "1",
@@ -78,8 +78,15 @@ export default function TriageScreen({
     setFeedbackSent(false);
 
     try {
+      // Include recent conversation history so backend can use it in the prompt
+      const historyPayload = messages.map((m) => ({
+        role: m.role,
+        content: m.text,
+      }));
+
       const response = await axios.post(`${API_BASE_URL}/api/agent/triage`, {
         symptom: userText,
+        history: historyPayload,
       });
 
       const {
@@ -111,7 +118,11 @@ export default function TriageScreen({
         const newAiMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: "ai",
-          text: "Tôi đã phân tích xong triệu chứng của bạn. Vui lòng xem gợi ý chuyên khoa ở bảng bên phải.",
+          text: result?.message
+            ? result.message
+            : result?.question
+              ? result?.question
+              : "Tôi đã phân tích xong triệu chứng của bạn. Vui lòng xem gợi ý chuyên khoa ở bảng bên phải.",
           time: "Vừa xong",
         };
         setMessages((prev) => [...prev, newAiMsg]);
@@ -194,8 +205,9 @@ export default function TriageScreen({
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "items-end self-end" : "items-start"
-                }`}
+              className={`flex flex-col max-w-[85%] ${
+                msg.role === "user" ? "items-end self-end" : "items-start"
+              }`}
             >
               <div
                 className={
@@ -215,12 +227,13 @@ export default function TriageScreen({
                   </div>
                 )}
                 <p
-                  className={`text-xl leading-relaxed ${msg.role === "user"
-                    ? "text-on-secondary-container font-medium"
-                    : msg.role === "emergency"
-                      ? "text-red-800 font-bold"
-                      : "text-on-surface"
-                    }`}
+                  className={`text-xl leading-relaxed ${
+                    msg.role === "user"
+                      ? "text-on-secondary-container font-medium"
+                      : msg.role === "emergency"
+                        ? "text-red-800 font-bold"
+                        : "text-on-surface"
+                  }`}
                 >
                   {msg.text}
                 </p>
@@ -328,14 +341,15 @@ export default function TriageScreen({
 
           <div className="space-y-6">
             {aiResult ? (
-              aiResult.top_3.map((item: any, index: number) => (
+              aiResult.top_3?.map((item: any, index: number) => (
                 <div
                   key={index}
                   onClick={() => setSelectedSpecialty(item.department)}
-                  className={`p-8 rounded-3xl shadow-sm border cursor-pointer hover:shadow-md transition-all active:scale-[0.98] ${index === 0
-                    ? "bg-surface-container-lowest border-primary/20"
-                    : "bg-surface-container-lowest/60 border-outline-variant/10"
-                    }`}
+                  className={`p-8 rounded-3xl shadow-sm border cursor-pointer hover:shadow-md transition-all active:scale-[0.98] ${
+                    index === 0
+                      ? "bg-surface-container-lowest border-primary/20"
+                      : "bg-surface-container-lowest/60 border-outline-variant/10"
+                  }`}
                 >
                   <div className="flex justify-between items-end mb-4">
                     <div>

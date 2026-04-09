@@ -30,11 +30,18 @@ triage_model = genai.GenerativeModel(
     generation_config={"response_mime_type": "application/json"},
 )
 
-BASE_PROMPT = """Bạn là bác sĩ phân loại bệnh nhân tại bệnh viện VinMec.
-Phân tích triệu chứng sau và trả về Top 3 chuyên khoa phù hợp nhất.
-Bắt buộc trả về đúng định dạng JSON này:
-{{"top_3": [{{"department": "tên khoa", "confidence": số_từ_1_đến_100}}]}}
-
+BASE_PROMPT = """
+Bạn là Agent phân loại bệnh nhân (Triage) chuyên nghiệp của Vinmec. 
+Bắt buộc trả về định dạng JSON:
+Nhiệm vụ của bạn là phân tích triệu chứng và điều hướng bệnh nhân theo 4 luồng sau:
+1. EMERGENCY PATH (Cấp cứu): Nếu thấy dấu hiệu nguy hiểm (khó thở dữ dội, đau thắt ngực trái lan ra tay, mất ý thức). 
+   => Output: {{"path":"emergency", "message":"CẢNH BÁO KHẨN CẤP...", "hotline":"1900 232389".}}
+2. LOW-CONFIDENCE PATH (Mơ hồ): Nếu triệu chứng quá chung chung (vd: "đau", "không khỏe", "mệt").
+   => Output: {{"path":"low_confidence", "question":"Bạn có thể mô tả rõ hơn vùng bị đau hoặc có sốt không?".}}
+3. HAPPY/CORRECTION PATH (Phân khoa): Nếu triệu chứng rõ ràng hoặc bệnh nhân vừa bổ sung thêm thông tin.
+    => Output: {{"top_3": [{{"department": "tên khoa", "confidence": số_từ_1_đến_100}}]}}
+4. GREETING/OFF-TOPIC PATH (Chào hỏi/Ngoài lề): Nếu user chào hỏi hoặc hỏi chuyện không liên quan y tế.
+   => Output: {{"path": "out_of_scope", "message": "Chào bạn, tôi là trợ lý điều hướng chuyên khoa của Vinmec. Hãy cho tôi biết bạn đang gặp vấn đề sức khỏe nào để tôi hỗ trợ nhé!"}}
 Lưu ý:
 - confidence phải là số nguyên từ 1 đến 100
 - Sắp xếp theo confidence giảm dần
@@ -47,15 +54,16 @@ Triệu chứng của bệnh nhân: "{symptom}"
 @router.post("/triage", response_model=TriageResponse)
 async def get_triage(request: TriageRequest):
     try:
+        history_context = "\n".join([f"{m.role}: {m.content}" for m in (request.history)[:10]])
+        print(request)
+        full_prompt = f"{BASE_PROMPT}\n\nLỊCH SỬ CHAT:\n{history_context}\n\nTRIỆU CHỨNG MỚI: {request.symptom}"
         # Step 1: RAG — retrieve similar past cases
         similar_feedbacks = retrieve_similar_feedback(request.symptom)
         rag_context = build_rag_context(similar_feedbacks)
         rag_feedback_count = len(similar_feedbacks)
 
         # Step 2: Build augmented prompt
-        prompt = BASE_PROMPT.format(
-            rag_context=rag_context, symptom=request.symptom
-        )
+        prompt = full_prompt.format(rag_context=rag_context, symptom=request.symptom)
 
         # Step 3: Call Gemini for triage
         response = triage_model.generate_content(prompt)

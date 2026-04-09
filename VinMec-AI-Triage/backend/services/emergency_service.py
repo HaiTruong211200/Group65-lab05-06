@@ -56,9 +56,7 @@ def check_emergency(symptom: str) -> dict:
 
     # Layer 1: Fast keyword scan
     symptom_lower = symptom.lower()
-    keyword_match = any(
-        kw in symptom_lower for kw in settings.EMERGENCY_KEYWORDS
-    )
+    keyword_match = any(kw in symptom_lower for kw in settings.EMERGENCY_KEYWORDS)
 
     # Layer 2: AI severity scoring (always run for comprehensive check)
     ai_result = _ai_severity_check(symptom)

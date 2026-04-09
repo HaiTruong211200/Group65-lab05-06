@@ -3,13 +3,18 @@ Pydantic models for API request/response validation.
 """
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 
 # --- Requests ---
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
 
 class TriageRequest(BaseModel):
     symptom: str
+    history: List[ChatMessage] = []
 
 
 class FeedbackRequest(BaseModel):
@@ -20,6 +25,7 @@ class FeedbackRequest(BaseModel):
 
 
 # --- Responses ---
+
 
 class TriageResponse(BaseModel):
     log_id: str

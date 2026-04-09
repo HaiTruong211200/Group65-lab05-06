@@ -4,3 +4,7 @@ pymongo
 python-dotenv
 google-generativeai
 pydantic
+matplotlib
+seaborn
+scikit-learn
+numpy
