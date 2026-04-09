@@ -9,16 +9,22 @@ import {
   ThumbsUp,
   ThumbsDown,
   X,
+  Sparkles,
+  Siren,
 } from "lucide-react";
 
 type Message = {
   id: string;
-  role: "ai" | "user";
+  role: "ai" | "user" | "emergency";
   text: string;
   time: string;
 };
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+interface TriageScreenProps {
+  onEmergencyTrigger: () => void;
+}
+
+const API_BASE_URL = "http://127.0.0.1:8001";
 const INITIAL_MESSAGES: Message[] = [
   {
     id: "1",
@@ -28,21 +34,33 @@ const INITIAL_MESSAGES: Message[] = [
   },
 ];
 
-export default function TriageScreen() {
+export default function TriageScreen({
+  onEmergencyTrigger,
+}: TriageScreenProps) {
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  // Quan trọng: Lưu kết quả AI và log_id từ backend
   const [aiResult, setAiResult] = useState<any>(null);
   const [currentLogId, setCurrentLogId] = useState<string | null>(null);
   const [selectedSpecialty, setSelectedSpecialty] = useState<string | null>(
     null,
   );
+  const [emergencyInfo, setEmergencyInfo] = useState<{
+    is_emergency: boolean;
+    emergency_message: string;
+    severity: string;
+  } | null>(null);
+  const [ragFeedbackCount, setRagFeedbackCount] = useState(0);
+  const [feedbackSent, setFeedbackSent] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 1. Hàm gọi API Triage (Khi nhấn Gửi)
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // 1. Triage API call
   const handleSend = async () => {
     if (!inputValue.trim()) return;
 
@@ -57,34 +75,55 @@ export default function TriageScreen() {
     setMessages((prev) => [...prev, newUserMsg]);
     setInputValue("");
     setIsTyping(true);
+    setFeedbackSent(false);
 
     try {
       const response = await axios.post(`${API_BASE_URL}/api/agent/triage`, {
         symptom: userText,
       });
 
-      const { log_id, result } = response.data;
+      const {
+        log_id,
+        result,
+        is_emergency,
+        emergency_message,
+        severity,
+        rag_feedback_count,
+      } = response.data;
 
-      // Cập nhật State để hiển thị cột bên phải
       setCurrentLogId(log_id);
       setAiResult(result);
+      setRagFeedbackCount(rag_feedback_count || 0);
+      setEmergencyInfo({ is_emergency, emergency_message, severity });
 
-      const newAiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "ai",
-        text: "Tôi đã phân tích xong triệu chứng của bạn. Vui lòng xem gợi ý chuyên khoa ở bảng bên phải.",
-        time: "Vừa xong",
-      };
-      setMessages((prev) => [...prev, newAiMsg]);
+      if (is_emergency) {
+        // Emergency — show red alert in chat
+        const emergencyMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "emergency",
+          text:
+            emergency_message ||
+            "⚠️ Phát hiện dấu hiệu nguy hiểm! Vui lòng gọi Cấp cứu NGAY.",
+          time: "Vừa xong",
+        };
+        setMessages((prev) => [...prev, emergencyMsg]);
+      } else {
+        const newAiMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          text: "Tôi đã phân tích xong triệu chứng của bạn. Vui lòng xem gợi ý chuyên khoa ở bảng bên phải.",
+          time: "Vừa xong",
+        };
+        setMessages((prev) => [...prev, newAiMsg]);
+      }
     } catch (error) {
       console.error("Lỗi gọi API:", error);
-      // Fallback nếu server sập
       setMessages((prev) => [
         ...prev,
         {
           id: "err",
           role: "ai",
-          text: "Lỗi kết nối server...",
+          text: "Lỗi kết nối server. Vui lòng thử lại sau.",
           time: "Vừa xong",
         },
       ]);
@@ -93,7 +132,7 @@ export default function TriageScreen() {
     }
   };
 
-  // 2. Hàm gửi Feedback (Khi nhấn Có/Không hoặc chọn Khoa)
+  // 2. Feedback API call (FIXED — previously not calling API)
   const sendFeedback = async (
     specialty: string,
     rating: boolean | null = null,
@@ -109,6 +148,7 @@ export default function TriageScreen() {
         user_rating: rating,
       });
       console.log("Flywheel: Đã lưu feedback thành công!");
+      setFeedbackSent(true);
     } catch (error) {
       console.error("Lỗi lưu feedback:", error);
     }
@@ -118,6 +158,21 @@ export default function TriageScreen() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSend();
+    }
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "CRITICAL":
+        return "bg-red-600 text-white";
+      case "HIGH":
+        return "bg-orange-500 text-white";
+      case "MEDIUM":
+        return "bg-yellow-400 text-gray-900";
+      case "LOW":
+        return "bg-green-500 text-white";
+      default:
+        return "bg-gray-400 text-white";
     }
   };
 
@@ -139,25 +194,55 @@ export default function TriageScreen() {
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "items-end self-end" : "items-start"}`}
+              className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "items-end self-end" : "items-start"
+                }`}
             >
               <div
                 className={
                   msg.role === "user"
                     ? "bg-secondary-container p-6 rounded-3xl"
-                    : "bg-surface-container-lowest border border-outline-variant/15 p-6 rounded-3xl shadow-sm"
+                    : msg.role === "emergency"
+                      ? "bg-red-50 border-2 border-red-400 p-6 rounded-3xl shadow-lg animate-pulse"
+                      : "bg-surface-container-lowest border border-outline-variant/15 p-6 rounded-3xl shadow-sm"
                 }
               >
+                {msg.role === "emergency" && (
+                  <div className="flex items-center gap-2 mb-3">
+                    <Siren className="w-6 h-6 text-red-600" />
+                    <span className="text-red-700 font-black text-sm uppercase tracking-wider">
+                      CẢNH BÁO KHẨN CẤP
+                    </span>
+                  </div>
+                )}
                 <p
-                  className={`text-xl leading-relaxed ${msg.role === "user" ? "text-on-secondary-container font-medium" : "text-on-surface"}`}
+                  className={`text-xl leading-relaxed ${msg.role === "user"
+                    ? "text-on-secondary-container font-medium"
+                    : msg.role === "emergency"
+                      ? "text-red-800 font-bold"
+                      : "text-on-surface"
+                    }`}
                 >
                   {msg.text}
                 </p>
+                {msg.role === "emergency" && (
+                  <button
+                    onClick={onEmergencyTrigger}
+                    className="mt-4 w-full bg-red-600 text-white py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:bg-red-700 active:scale-[0.98] transition-all"
+                  >
+                    <AlertTriangle className="w-6 h-6 fill-current" />
+                    GỌI CẤP CỨU NGAY
+                  </button>
+                )}
               </div>
               <span
                 className={`text-sm text-on-surface-variant mt-2 ${msg.role === "user" ? "mr-4" : "ml-4"}`}
               >
-                {msg.role === "user" ? "Bạn" : "AI Vinmec"} • {msg.time}
+                {msg.role === "user"
+                  ? "Bạn"
+                  : msg.role === "emergency"
+                    ? "⚠️ Hệ thống"
+                    : "AI Vinmec"}{" "}
+                • {msg.time}
               </span>
             </div>
           ))}
@@ -179,7 +264,7 @@ export default function TriageScreen() {
                 ></div>
               </div>
               <span className="text-sm text-on-surface-variant mt-2 ml-4">
-                AI Vinmec đang gõ...
+                AI Vinmec đang phân tích...
               </span>
             </div>
           )}
@@ -212,12 +297,34 @@ export default function TriageScreen() {
       {/* Right Column (40%): Results Dashboard */}
       <section className="w-full md:w-[40%] bg-surface-container-low flex flex-col border-l border-outline-variant/10">
         <div className="p-10 flex-grow overflow-y-auto">
-          <div className="flex items-center gap-3 mb-8">
+          <div className="flex items-center gap-3 mb-4">
             <Activity className="text-primary w-8 h-8" />
             <h2 className="text-2xl font-bold text-on-surface tracking-tight">
               Phân tích Chuyên khoa
             </h2>
           </div>
+
+          {/* RAG indicator */}
+          {ragFeedbackCount > 0 && (
+            <div className="flex items-center gap-2 mb-6 px-4 py-2 bg-blue-50 border border-blue-200 rounded-xl">
+              <Sparkles className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-700">
+                Gợi ý được cải thiện từ {ragFeedbackCount} feedback trước đó
+              </span>
+            </div>
+          )}
+
+          {/* Severity Badge */}
+          {emergencyInfo &&
+            emergencyInfo.severity !== "NORMAL" &&
+            emergencyInfo.severity !== "LOW" && (
+              <div
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold mb-6 ${getSeverityColor(emergencyInfo.severity)}`}
+              >
+                <AlertTriangle className="w-4 h-4" />
+                Mức độ: {emergencyInfo.severity}
+              </div>
+            )}
 
           <div className="space-y-6">
             {aiResult ? (
@@ -225,11 +332,10 @@ export default function TriageScreen() {
                 <div
                   key={index}
                   onClick={() => setSelectedSpecialty(item.department)}
-                  className={`p-8 rounded-3xl shadow-sm border cursor-pointer hover:shadow-md transition-all active:scale-[0.98] ${
-                    index === 0
-                      ? "bg-surface-container-lowest border-primary/20"
-                      : "bg-surface-container-lowest/60 border-outline-variant/10"
-                  }`}
+                  className={`p-8 rounded-3xl shadow-sm border cursor-pointer hover:shadow-md transition-all active:scale-[0.98] ${index === 0
+                    ? "bg-surface-container-lowest border-primary/20"
+                    : "bg-surface-container-lowest/60 border-outline-variant/10"
+                    }`}
                 >
                   <div className="flex justify-between items-end mb-4">
                     <div>
@@ -250,7 +356,7 @@ export default function TriageScreen() {
                   </div>
                   <div className="h-4 w-full bg-surface-container-highest rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-primary to-blue-300"
+                      className="h-full bg-gradient-to-r from-primary to-blue-300 transition-all duration-700"
                       style={{ width: `${item.confidence}%` }}
                     ></div>
                   </div>
@@ -263,7 +369,17 @@ export default function TriageScreen() {
             )}
           </div>
 
-          {/* Nút Cấp cứu: Tích hợp Handoff Trigger */}
+          {/* Feedback sent confirmation */}
+          {feedbackSent && (
+            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
+              <ShieldCheck className="w-5 h-5 text-green-600" />
+              <span className="text-sm font-medium text-green-700">
+                Cảm ơn bạn! Feedback đã được ghi nhận để cải thiện AI.
+              </span>
+            </div>
+          )}
+
+          {/* Emergency Panel */}
           <div className="mt-10 p-8 rounded-3xl bg-error-container/20 border-2 border-error/20 flex flex-col gap-4">
             <div className="flex items-center gap-3 text-error">
               <AlertTriangle className="w-8 h-8 fill-current" />
@@ -274,7 +390,10 @@ export default function TriageScreen() {
             </p>
             <button
               className="w-full bg-error text-on-error py-6 rounded-2xl font-black text-xl flex items-center justify-center gap-4 shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
-              onClick={() => sendFeedback("CẤP CỨU", false, true)}
+              onClick={() => {
+                sendFeedback("CẤP CỨU", false, true);
+                onEmergencyTrigger();
+              }}
             >
               <AlertTriangle className="w-8 h-8 fill-current" />
               GỌI CẤP CỨU NGAY
@@ -292,7 +411,7 @@ export default function TriageScreen() {
         </footer>
       </section>
 
-      {/* Feedback Modal */}
+      {/* Feedback Modal — FIXED: now actually calls API */}
       {selectedSpecialty && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-surface-container-lowest rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200 relative">
@@ -317,14 +436,14 @@ export default function TriageScreen() {
 
             <div className="flex gap-4 w-full">
               <button
-                onClick={() => setSelectedSpecialty(null)}
+                onClick={() => sendFeedback(selectedSpecialty!, false)}
                 className="flex-1 py-3 px-4 rounded-xl font-bold text-error bg-error/10 hover:bg-error/20 transition-colors flex items-center justify-center gap-2"
               >
                 <ThumbsDown className="w-5 h-5" />
                 Không
               </button>
               <button
-                onClick={() => setSelectedSpecialty(null)}
+                onClick={() => sendFeedback(selectedSpecialty!, true)}
                 className="flex-1 py-3 px-4 rounded-xl font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-colors flex items-center justify-center gap-2"
               >
                 <ThumbsUp className="w-5 h-5" />

@@ -22,7 +22,9 @@ export default function App() {
       />
       <main className="grow flex flex-col md:flex-row h-[calc(100vh-88px)]">
         {currentScreen === "triage" ? (
-          <TriageScreen />
+          <TriageScreen
+            onEmergencyTrigger={() => setCurrentScreen("emergency")}
+          />
         ) : (
           <EmergencyScreen onBack={() => setCurrentScreen("triage")} />
         )}

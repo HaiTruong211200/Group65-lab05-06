@@ -8,17 +8,73 @@ Bệnh nhân đến Vinmec thường bối rối không biết nên đăng ký k
 
 ## Canvas draft
 
-|         | Value                                                                                                                                   | Trust                                                                                                            | Feasibility                                                                                               |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Trả lời | Bệnh nhân mới/vãng lai. Pain: Chờ đợi lâu, khám sai khoa. AI gợi ý: Phân tích triệu chứng tự nhiên để đưa ra Top 3 chuyên khoa phù hợp. | Sai khoa gây tốn tiền/thời gian. Cần giải thích lý do gợi ý và luôn có nút "Gặp lễ tân" để đảm bảo an toàn y tế. | API LLM có chi phí thấp (~$0.005/lượt). Thách thức: Xử lý các triệu chứng đa tầng hoặc từ ngữ địa phương. |
+|         | Value   | Trust | Feasibility |
+| ------- | ------- | ----- | ----------- |
+| Trả lời | - User: |
+
+- Bệnh nhân mới
+- Người nhà
+- Lễ tân (copilot)
+- Pain:
+  - Không hiểu triệu chứng → chọn sai khoa
+  - Tắc nghẽn sảnh giờ cao điểm
+- Solution:
+  - AI triage + Adaptive questioning (hỏi thêm 2–3 câu)
+  - Gợi ý Top 3 khoa + giải thích
+- Augmentation:
+  - AI hỗ trợ quyết định (human-in-the-loop)
+- Extra Value:
+  - Pre-visit guidance:
+    - Nhịn ăn?
+    - Khung giờ ít đông?
+- Impact:
+  - Giảm wait time
+  - Tăng trải nghiệm bệnh nhân  
+    |
+- Risk:
+  - Sai khoa
+  - Miss case nguy hiểm
+- Trust Design:
+  - Explainability (mapping triệu chứng → khoa)
+  - Confidence score
+- Safety Layer:
+  - Risk scoring (Low / Medium / High)
+  - Detect triệu chứng nguy hiểm → redirect cấp cứu
+- UX:
+  - Không dùng wording “chẩn đoán”
+  - Luôn có “Gặp lễ tân”
+- Recovery:
+  - Fallback human support
+    | - Cost:
+  - ~$0.005/request
+- Latency:
+  - <2–3s
+- Architecture:
+  - LLM + Rule-based safety layer
+- Dependencies:
+  - HIS integration
+- Challenges:
+  - Multi-symptom reasoning
+  - Medical safety (hallucination)
+    |
 
 **Auto hay aug?** Augmentation — AI hỗ trợ tư vấn và định hướng, bệnh nhân và lễ tân là người đưa ra quyết định cuối cùng.
 
 **Learning signal:** Ghi nhận chuyên khoa thực tế mà bệnh nhân đã khám (từ hệ thống HIS) so với gợi ý của AI để tinh chỉnh độ chính xác của Prompt.
 
+- Data:
+  - Prediction vs actual department
+  - Correction từ lễ tân
+- Loop:
+  - Fine-tune prompt
+  - Ranking model cải thiện Top-3
+- Metrics:
+  - Accuracy Top-1 / Top-3
+  - Escalation rate
+
 ## 1. User Stories × 4 paths
 
-**Happy Path:** Bệnh nhân nói "Tôi bị đau tức ngực và hay hụt hơi". AI hỏi thêm 1-2 câu về thâm niên hút thuốc/huyết áp, sau đó gợi ý: 1. Khoa Tim mạch (90%), 2. Khoa Nội tổng quát.
+**Happy Path:** Bệnh nhân nói "Tôi bị đau tức ngực và hay hụt hơi". AI hỏi thêm 1-2 câu về thâm niên hút thuốc/huyết áp, sau đó gợi ý: 1. Khoa Tim mạch (90%), 2. Khoa Nội tổng quát.khi người dùng cung cấp thông tin đủ rõ ràng, ví dụ như “tôi bị đau bụng 2 ngày nay và hơi buồn nôn”, hệ thống có thể xử lý ngay lập tức mà không cần hỏi thêm. AI sẽ trả về danh sách Top 3 chuyên khoa phù hợp kèm theo mức độ tin cậy, trong đó Nội tiêu hóa có thể đứng đầu với độ tin cậy cao, đồng thời đưa ra giải thích ngắn gọn dựa trên mối liên hệ giữa triệu chứng và hệ tiêu hóa. Người dùng sau đó có thể trực tiếp đặt lịch mà không cần thông qua lễ tân, giúp giảm đáng kể thời gian chờ và tăng trải nghiệm ban đầu. AI sẽ cung cấp các thông tin quan trọng như có cần nhịn ăn hay không, cần mang theo giấy tờ gì, hoặc khung giờ nào ít đông để tối ưu thời gian chờ.Ví dụ, nếu bệnh nhân chọn khám tiêu hóa, hệ thống có thể gợi ý nhịn ăn 6 tiếng và mang theo kết quả xét nghiệm trước đó. Điều này giúp giảm tình trạng phải quay lại nhiều lần và nâng cao trải nghiệm tổng thể.
 
 **Low-confidence Path:** Bệnh nhân nói "Thấy không khỏe trong người". AI phản hồi: "Triệu chứng này chưa rõ ràng để xác định khoa. Bạn đang cảm thấy đau, sốt hay mệt mỏi ở vùng nào cụ thể không?".
 
